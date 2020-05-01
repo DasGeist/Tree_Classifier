@@ -4,8 +4,8 @@ import matplotlib.pyplot as plt
 import seaborn as sb
 import pandas
 def classifier(item):
-    return "orange" if (item[0]*item[1])>=0 else "blue"
-le=600
+    return "orange" if (item[0]*item[1])*(-1 if random.randint(0,100)<5 else 1)>=0 else "blue"
+le=2000
 lims=[(-10,10),(-10,10)]
 items=[[round(l[0]+(random.random()*(l[1]-l[0])),7) for l in lims] for i in range(le)]
 

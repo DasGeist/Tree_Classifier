@@ -233,6 +233,36 @@ dataset* csv_to_dataset(const char* fname)
     return ret;
 }
 
+label* select_label(dataset* ds,char* labelname)
+{
+    if(!ds||!(ds->col_labels))return 0;
+    tree_ll* lab=ds->col_labels;
+    while(lab)
+    {
+        if(strncmp(((label*)lab->self)->name,labelname,64)==0)goto found;
+        lab=lab->next;
+    }
+    return NULL;
+    found:
+    return lab->self;
+}
+
+int select_label_index(dataset* ds,char* labelname)
+{
+    if(!ds||!(ds->col_labels))return 0;
+    tree_ll* lab=ds->col_labels;
+    int i=0;
+    while(lab)
+    {
+        if(strncmp(((label*)lab->self)->name,labelname,64)==0)goto found;
+        lab=lab->next;
+        i++;
+    }
+    return -1;
+    found:
+    return i;
+}
+
 void printDataset(dataset* ds)
 {
     tree_ll *cur,*field,*entry;
@@ -268,6 +298,7 @@ void infoDataset(dataset* ds)
     if(!ds)return;
     tree_ll *field,*entry;
     field=ds->col_labels;
+    printf("Length: %d\n",ll_len(&ds->lines));
     while(field)
     {
         printf("Field \"%s\":\r\n\t*Type: ",((label*)field->self)->name);
@@ -919,4 +950,44 @@ void print_tree(tree_node* root)
 {
     if(!root)return;
     _print_tree(root,0);
+}
+dataset* sample_dataset(dataset* ds,int len,char* classfield)
+{
+    if(!ds||len==0)return NULL;
+    label* classlabel=select_label(ds,classfield);
+    if(!classlabel)return NULL;
+    char* selected;
+    int cur,subs=ll_len(&classlabel->sublabels),olen=ll_len(&ds->lines),tlen,clen,slen,sel,i;
+    f_namefilter conf;
+    conf.field_index=select_label_index(ds,classfield);
+    tree_ll* cval,*line;
+    dataset* ret=malloc(sizeof(dataset));
+    ret->col_labels=ds->col_labels;
+    ret->lines=NULL;
+    dataset* subset;
+
+    cval=classlabel->sublabels;
+    for(cur=0;cur<subs;cur++)
+    {
+        conf.target=cval->self;
+        subset=filter_dataset(ds,f_by_name,&conf);
+        slen=ll_len(&subset->lines);
+        clen=0;
+        selected=calloc(slen,1);
+        tlen=len*((double)slen/(double)olen);
+        while(clen<tlen)
+        {
+            while(selected[(sel=rand()%slen)]);
+            line=subset->lines;
+            for(i=0;i<sel;i++)line=line->next;
+            ll_push(&ret->lines,line->self);
+            selected[sel]=1;
+            clen++;
+        }
+        free(selected);
+        ll_free(&subset->lines);
+        free(subset);
+        cval=cval->next;
+    }
+    return ret;
 }

@@ -1,16 +1,17 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 #include "treeClassifier.h"
 
 int main()
 {
+    srand(time(NULL));
     printf("Loading training dataset...\n");
-    dataset* train=csv_to_dataset("datasets/train.csv");
+    dataset* data=csv_to_dataset("datasets/test.csv");
     tree_ll* line;
-    //printf("Loading testing dataset...\n");
-    //dataset* data=csv_to_dataset("datasets/test.csv");
+    dataset* train=sample_dataset(data,ll_len(&data->lines)/2,"colour");
     tree_node* root=NULL;
-    if(!train)
+    if(!data||!train)
     {
         printf("File not found.\n");
         return 1;
@@ -18,17 +19,16 @@ int main()
     printf("Dataset info:\n");
     infoDataset(train);
     printf("Fitting...\n");
-    fit_tree(&root,train,0.05,"colour");
+    fit_tree(&root,train,2,"colour");
     printf("Fitting completed.\n");
-    int tests=500,right=0,i,idx,j;
+    int tests=ll_len(&data->lines),right=0;
     label* lab;
-    for(i=0;i<tests;i++)
+    line=data->lines;
+    while(line)
     {
-        line=train->lines;
-        idx=rand()%ll_len(&line);
-        for(j=0;j<idx;j++)line=line->next;
         lab=classify(root,line->self,train->col_labels);
         right+=((tree_ll*)(line->self))->next->next->next->next->self==lab;
+        line=line->next;
     }
     printf("%d right out of %d. (%.2lf)\n",right,tests,((double)right/(double)tests)*100);
     print_tree(root);

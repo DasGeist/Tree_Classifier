@@ -82,6 +82,15 @@ is a categorical value (represented by a string).
 dataset* csv_to_dataset(const char* fname);
 
 /*
+Selects a label from its name
+*/
+label* select_label(dataset* ds,char* labelname);
+/*
+Selects a label index from its name
+*/
+int select_label_index(dataset* ds,char* labelname);
+
+/*
 Prints a dataset
 */
 void printDataset(dataset* ds);
@@ -180,3 +189,7 @@ label* classify(tree_node* root,tree_ll* line,tree_ll* columns);
 Describe a tree
 */
 void print_tree(tree_node* root);
+/*
+Generate a balanced sample (according to the distributions of <classfield> on <ds>) of size <len>
+*/
+dataset* sample_dataset(dataset* ds,int len,char* classfield);
