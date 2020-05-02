@@ -18,9 +18,9 @@ int main()
     }
     printf("Dataset info:\n#data:\n");
     infoDataset(data);
-    printf("#prune\n");
+    printf("#train\n");
     infoDataset(train);
-    printf("Fitting...\n");
+    printf("#prune...\n");
     infoDataset(prune);
     printf("#train:\n");
     fit_tree(&root,train,0,"colour");
@@ -28,6 +28,6 @@ int main()
     printf("Pruning...\n");
     prune_tree(&root,prune,"colour");
     printf("Pruning completed.\nScore: %.2lf\nSize: %d\n",tree_score(root,data,"colour")*100,tree_size(root));
-    //print_tree(root);
+    if(tree_size(root)<10)print_tree(root);
     return 0;
 }
