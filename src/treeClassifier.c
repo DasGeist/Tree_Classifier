@@ -27,6 +27,11 @@ SOFTWARE.
 #include <math.h>
 #include "treeClassifier.h"
 
+/*
+This macro might make some of the code slightly more easily readable
+*/
+#define foreach(var,code) while(var){(code);var=var->next;}
+
 tree_ll *ll_push(tree_ll** list,void* item)
 {
     tree_ll* prev=NULL;
@@ -70,9 +75,9 @@ void ll_free_self(tree_ll **list)
     if(!list||!(*list))return;
     if((*list)->next!=NULL)ll_free(&(*list)->next);
     free(*list);
-    free((*list)->self);
-    *list=NULL;
+    if((*list)->self)free((*list)->self);
     (*list)->self=NULL;
+    *list=NULL;
 }
 tree_ll* ll_search(tree_ll** list,char func(void* item,void* arg),void* arg)
 {
@@ -233,34 +238,53 @@ dataset* csv_to_dataset(const char* fname)
     return ret;
 }
 
-label* select_label(dataset* ds,char* labelname)
+void* get_entry_by_label_name(tree_ll* line,tree_ll* column,char* labelname)
 {
-    if(!ds||!(ds->col_labels))return 0;
-    tree_ll* lab=ds->col_labels;
-    while(lab)
-    {
-        if(strncmp(((label*)lab->self)->name,labelname,64)==0)goto found;
-        lab=lab->next;
-    }
+    if(!line||!column)return NULL;
+    foreach(column,{
+        if(strncmp(((label*)column->self)->name,labelname,64)==0)goto found;
+        line=line->next;
+    });
     return NULL;
     found:
-    return lab->self;
+    return line->self;
 }
 
-int select_label_index(dataset* ds,char* labelname)
+label* select_label(tree_ll* columns,char* labelname)
 {
-    if(!ds||!(ds->col_labels))return 0;
-    tree_ll* lab=ds->col_labels;
+    if(!columns)return 0;
+    foreach(columns,{
+        if(strncmp(((label*)columns->self)->name,labelname,64)==0)goto found;
+    });
+    return NULL;
+    found:
+    return columns->self;
+}
+
+int select_label_index(tree_ll* columns,char* labelname)
+{
+    if(!columns)return 0;
     int i=0;
-    while(lab)
-    {
-        if(strncmp(((label*)lab->self)->name,labelname,64)==0)goto found;
-        lab=lab->next;
+    foreach(columns,{
+        if(strncmp(((label*)columns->self)->name,labelname,64)==0)goto found;
         i++;
-    }
+    });
     return -1;
     found:
     return i;
+}
+
+label* select_label_by_index(tree_ll* columns,int idx)
+{
+    if(!columns)return 0;
+    int i=0;
+    foreach(columns,{
+        if(i==idx)goto found;
+        i++;
+    });
+    return NULL;
+    found:
+    return columns->self;
 }
 
 void printDataset(dataset* ds)
@@ -697,7 +721,6 @@ double chi_squared(dataset* root,dataset** children,int len,label* classlabel)
             lab=lab->next;
         }
     }
-    printf("chi²=%.4lf\n",ret);
     return ret;
 }
 
@@ -870,6 +893,185 @@ void fit_tree(tree_node** root,dataset* ds,double chi_square_significance_limit,
     (*root)->subtrees=NULL;
 }
 
+label* most_frequent_class(tree_node* root,dataset* ds,char* classfield)
+{
+    if(!root||!ds)return NULL;
+    label* classlabel=select_label(ds->col_labels,classfield),*result;
+    unsigned int len=ll_len(&classlabel->sublabels),occurences[len],i,imax=0,max=0;
+    for(i=0;i<len;i++)occurences[i]=0;
+    tree_ll* line=ds->lines;
+    foreach(line,{
+        result=classify(root,line->self,ds->col_labels);
+        if(result)
+        {
+            occurences[select_label_index(classlabel->sublabels,result->name)]++;
+        }
+    });
+    for(i=0;i<len;i++)
+    {
+        if(occurences[i]>max)
+        {
+            imax=i;
+            max=occurences[i];
+        }
+    }
+    return select_label_by_index(classlabel->sublabels,imax);
+}
+
+int tree_size(tree_node* root)
+{
+    int s=1;
+    if(!root)return 0;
+    tree_ll* subtree=root->subtrees;
+    foreach(subtree,
+    {
+        s+=tree_size(subtree->self);
+    });
+    return s;
+}
+
+tree_node* clone_tree(tree_node* root)
+{
+    if(!root)return NULL;
+    tree_node* ret=malloc(sizeof(tree_node));
+    tree_ll* subtree;
+    ret->attribute=root->attribute;
+    ret->partition=root->partition;
+    ret->subtrees=NULL;
+    subtree=root->subtrees;
+    foreach(subtree,{
+        ll_push(&ret->subtrees,clone_tree(subtree->self));
+    });
+    return ret;
+}
+
+void free_tree(tree_node** root)
+{
+    if(!root||!(*root))return;
+    tree_ll* subtree=(*root)->subtrees;
+    foreach(subtree,{
+        free_tree((tree_node**)&subtree->self);
+    });
+    free(*root);
+    *root=NULL;
+}
+
+double _prune_tree(tree_node** root,dataset* ds,char* classfield,tree_node* orig_tree)
+{
+    double score=0,pscore=0;
+    unsigned int idx=0;
+    label* leaf=NULL;
+    char all_leaves=1,all_eq=1,prune_anyways=0;
+    tree_ll* subtree,*subsubtree;
+    tree_node bkp;
+    dataset* subset;
+    f_numberfilter numconf;
+    f_namefilter namconf;
+    if(!root||!(*root)||!(*root)->subtrees||!ds||!ds->lines)return 0;
+    pscore=tree_score(orig_tree,ds,classfield);
+    subtree=(*root)->subtrees;
+    foreach(subtree,{
+        if((subsubtree=((tree_node*)(subtree->self))->subtrees))
+        {
+            all_leaves=0;
+            foreach(subsubtree,({
+                if(((tree_node*)subsubtree->self)->attribute->type==LABEL_NUM)
+                {
+                    numconf.bt=idx;
+                    numconf.field_index=select_label_index(ds->col_labels,((tree_node*)subsubtree->self)->attribute->name);
+                    numconf.target=((tree_node*)subsubtree->self)->partition;
+                    subset=filter_dataset(ds,f_by_number,&numconf);
+                }
+                else
+                {
+                    namconf.field_index=select_label_index(ds->col_labels,((tree_node*)subsubtree->self)->attribute->name);
+                    namconf.target=select_label_by_index(((tree_node*)subsubtree->self)->attribute->sublabels,idx);
+                    subset=filter_dataset(ds,f_by_name,&namconf);
+                }
+                if(!subset->lines){
+                    prune_anyways=1;
+                    free(subset);
+                    break;
+                }
+                while(prune_tree((tree_node**)&subsubtree->self,subset,classfield));
+                ll_free(&subset->lines);
+                free(subset);
+            }));
+        }
+        else
+        {
+            if(all_eq)
+            {
+                if(leaf)
+                {
+                    all_eq=all_eq&&((tree_node*)(subtree->self))->attribute==leaf;
+                }
+                else
+                {
+                    leaf=((tree_node*)(subtree->self))->attribute;
+                }
+            }
+        }
+        idx++;
+    });
+    if(all_leaves)
+    {
+        if(all_eq)
+        {
+            subtree=(*root)->subtrees;
+            foreach(subtree,{
+                free(subtree->self);
+            });
+            ll_free(&(*root)->subtrees);
+            (*root)->partition=0;
+            (*root)->attribute=leaf;
+            return -1;
+        }
+        else
+        {
+            bkp=**root;
+            (*root)->attribute=most_frequent_class(&bkp,ds,classfield);
+            (*root)->partition=0;
+            (*root)->subtrees=NULL;
+            score=tree_score(orig_tree,ds,classfield);
+            if(score<pscore)
+            {
+                **root=bkp;
+            }
+            else
+            {
+                ll_free_self(&bkp.subtrees);
+            }
+        }
+    }
+    else if(prune_anyways)
+    {
+        bkp=**root;
+        (*root)->attribute=most_frequent_class(&bkp,ds,classfield);
+        (*root)->partition=0;
+        (*root)->subtrees=NULL;
+        score=tree_score(orig_tree,ds,classfield);
+        if(score<pscore)
+        {
+            **root=bkp;
+        }
+        else
+        {
+            ll_free_self(&bkp.subtrees);
+        }
+    }
+    else return 0;
+    score=tree_score(orig_tree,ds,classfield);
+    return pscore-score;
+}
+
+double prune_tree(tree_node** root,dataset* ds,char* classfield)
+{
+    double prev=0,cur;
+    while((cur=_prune_tree(root,ds,classfield,*root)))prev=cur;
+    return prev;
+}
+
 label* classify(tree_node* root,tree_ll* line,tree_ll* columns)
 {
     if(!root||!line)return NULL;
@@ -908,6 +1110,21 @@ label* classify(tree_node* root,tree_ll* line,tree_ll* columns)
         }
     }
     return NULL;
+}
+
+double tree_score(tree_node* root,dataset* ds,char* classfield)
+{
+    int tests=ll_len(&ds->lines),right=0;
+    tree_ll* line;
+    label* lab;
+    line=ds->lines;
+    while(line)
+    {
+        lab=classify(root,line->self,ds->col_labels);
+        right+=get_entry_by_label_name(line->self,ds->col_labels,classfield)==lab;
+        line=line->next;
+    }
+    return (double)right/(double)tests;
 }
 
 void _print_tree(tree_node* root,int l)
@@ -954,12 +1171,12 @@ void print_tree(tree_node* root)
 dataset* sample_dataset(dataset* ds,int len,char* classfield)
 {
     if(!ds||len==0)return NULL;
-    label* classlabel=select_label(ds,classfield);
+    label* classlabel=select_label(ds->col_labels,classfield);
     if(!classlabel)return NULL;
     char* selected;
     int cur,subs=ll_len(&classlabel->sublabels),olen=ll_len(&ds->lines),tlen,clen,slen,sel,i;
     f_namefilter conf;
-    conf.field_index=select_label_index(ds,classfield);
+    conf.field_index=select_label_index(ds->col_labels,classfield);
     tree_ll* cval,*line;
     dataset* ret=malloc(sizeof(dataset));
     ret->col_labels=ds->col_labels;

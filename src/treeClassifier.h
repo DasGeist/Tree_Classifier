@@ -82,13 +82,17 @@ is a categorical value (represented by a string).
 dataset* csv_to_dataset(const char* fname);
 
 /*
+Returns a line's entry at column <labelname>
+*/
+void* get_entry_by_label_name(tree_ll* line,tree_ll* columns,char* labelname);
+/*
 Selects a label from its name
 */
-label* select_label(dataset* ds,char* labelname);
+label* select_label(tree_ll* columns,char* labelname);
 /*
 Selects a label index from its name
 */
-int select_label_index(dataset* ds,char* labelname);
+int select_label_index(tree_ll* columns,char* labelname);
 
 /*
 Prints a dataset
@@ -181,6 +185,33 @@ Trains a tree based on a dataset
 chi_square_significance_limit is generally 0.05
 */
 void fit_tree(tree_node** root,dataset* ds,double chi_square_significance_limit,char* classfield);
+/*
+Returns the most frequent class from the set after being classified by the tree
+*/
+label* most_frequent_class(tree_node* root,dataset* ds,char* classfield);
+/*
+Returns the number of nodes (counting leaves) in a tree
+*/
+int tree_size(tree_node* root);
+/*
+Deep-clones a tree
+*/
+tree_node* clone_tree(tree_node* root);
+/*
+Deep-frees a tree
+*/
+void free_tree(tree_node** root);
+/*
+Prunes a tree's unecessary nodes (until pruning reduces accuracy)
+Returns the score improvement or -1 if there was no improvement but the tree is still simpler
+(ex: ((a a) b) to (a b) )
+*/
+double prune_tree(tree_node** root,dataset* ds,char* classfield);
+/*
+Classifies all entries on dataset <ds> using tree <root> (ignoring <classfield>) then returns the
+success rate (double, 0=all classified wrong, 1=all classified correctly).
+*/
+double tree_score(tree_node* root,dataset* ds,char* classfield);
 /*
 Use a tree to classify a line.
 */
