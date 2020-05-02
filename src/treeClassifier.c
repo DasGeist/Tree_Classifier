@@ -337,7 +337,7 @@ void infoDataset(dataset* ds)
             entry=((label*)field->self)->sublabels;
             while(entry)
             {
-                printf("%s ",((label*)entry->self)->name);
+                printf("%s (count: %.0lf) ",((label*)entry->self)->name,reduce(ds,((label*)field->self)->name,r_count,entry->self,0));
                 entry=entry->next;
             }
             printf("]\r\n");

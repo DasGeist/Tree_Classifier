@@ -111,6 +111,24 @@ reverse=0 for ascending order, 1 for reverse order
 void sort_by(dataset* ds,char* field,char reverse);
 
 /*
+Reduction function for counting elements with a certain label
+field_type=LABEL_CAT
+arg=label* acc=0
+*/
+void r_count(char field_type,void* field,double* acc,void* arg);
+/*
+Reduction function for summing all elements
+field_type=LABEL_NUM
+arg=NULL acc=0
+*/
+void r_sum(char field_type,void* field,double* acc,void* arg);
+/*
+Reduction function for calculating the sum of all squared deviations from <double* arg>
+field_type=LABEL_NUM
+arg=&double acc=0
+*/
+void r_dev(char field_type,void* field,double* acc,void* arg);
+/*
 A reduction function. Calls <func> for each entry of the dataset. It initializes the accumulator with the value of <init>
 and passes the field's field_type,a pointer to the entry (double* for LABEL_NUM and label* for LABEL_CAT), a pointer to
 the accumulator and the argument pointer that was passed to the function.
