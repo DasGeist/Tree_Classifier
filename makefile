@@ -10,8 +10,11 @@ treetest:
 	gcc -o build/treetest -Lbuild/ -Wl,-rpath=./build src/treeTest.c -lm -Wall -Werror -g -ltreeclassifier
 foresttest:
 	make lib
-	#gcc -o build/foresttest -Lbuild/ -Wl,-rpath=./build src/forestTest.c -lm -Wall -Werror -g -ltreeclassifier
-	gcc -o build/foresttest src/forestTest.c src/treeClassifier.c -lm -Wall -Werror -g
+	gcc -o build/foresttest -Lbuild/ -Wl,-rpath=./build src/forestTest.c -lm -Wall -Werror -g -ltreeclassifier
+iristest:
+	make lib
+	#gcc -o build/iristest -Lbuild/ -Wl,-rpath=./build src/irisTest.c -lm -Wall -Werror -g -ltreeclassifier
+	gcc -o build/iristest src/irisTest.c src/treeClassifier.c -lm -Wall -Werror -g
 libforce:
 	rm -rf build
 	make lib
@@ -27,3 +30,4 @@ all:
 	@make libforce
 	@make treetest
 	@make foresttest
+	@make iristest

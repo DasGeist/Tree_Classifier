@@ -1021,6 +1021,169 @@ void fit_tree(tree_node** root,dataset* ds,double chi_square_significance_limit,
     (*root)->subtrees=NULL;
 }
 
+void fit_random_tree(tree_node** root,dataset* ds,double chi_square_significance_limit,char* classfield)
+{
+    if(!root||!ds)return;
+    int i=0,mi,len;
+    tree_ll* classlabel=ds->col_labels;
+    while(classlabel)
+    {
+        if(strncmp(((label*)classlabel->self)->name,classfield,64)==0)goto found;
+        classlabel=classlabel->next;
+    }
+    printf("KeyError: Field \"%s\" does not exist in dataset. Could not fit tree.\n",classfield);
+    return;
+    label* l=NULL;
+    double entropy,thresh,gain;
+    tree_ll* lab=ds->col_labels;
+    dataset** subsets;
+    tree_ll* working;
+    f_numberfilter nuconf;
+    f_namefilter naconf;
+    found:
+    l=NULL;
+    lab=ds->col_labels;
+    entropy=class_entropy(ds,classfield);
+    while(!l&&entropy)
+    {
+        mi=rand()%ll_len(&lab);
+        l=select_label_by_index(lab,mi);
+        if(strcmp(l->name,classfield))
+        {
+            if(l->type==LABEL_NUM)
+            {
+                thresh=optimize_threshold(ds,((label*)lab->self)->name,classfield);
+                gain=entropy-attribute_num_entropy(ds,((label*)lab->self)->name,classfield,thresh);
+            }
+            else
+            {
+                gain=entropy-attribute_entropy(ds,((label*)lab->self)->name,classfield);
+            }
+            if(gain<=0)goto leaf;
+        }
+        else l=NULL;
+    }
+    *root=malloc(sizeof(tree_node));
+    if(!l||!entropy)
+    {
+        /*We choose the biggest count and set ourselves as a leaf node*/
+        goto leaf;
+    }
+    if(l->type==LABEL_NUM)
+    {
+        (*root)->attribute=l;
+        (*root)->partition=thresh;
+        (*root)->subtrees=NULL;
+        subsets=malloc(sizeof(dataset*)*2);
+        nuconf.bt=0;
+        nuconf.field_index=mi;
+        nuconf.target=thresh;
+        subsets[0]=filter_dataset(ds,f_by_number,&nuconf);
+        nuconf.bt=1;
+        subsets[1]=filter_dataset(ds,f_by_number,&nuconf);
+        if(ll_len(&subsets[0]->lines)==0||ll_len(&subsets[1]->lines)==0)
+        {
+            ll_free(&subsets[0]->lines);
+            ll_free(&subsets[1]->lines);
+            free(subsets[0]);
+            free(subsets[1]);
+            goto leaf;
+        }
+
+        /*Chi-squared test*/
+        if(chi_squared(ds,subsets,2,classlabel->self)<chi_square_significance_limit)
+        {
+            /*If it doesn't pass the test, we choose the biggest count and set ourselves as a leaf node*/
+            ll_free(&subsets[0]->lines);
+            ll_free(&subsets[1]->lines);
+            free(subsets[0]);
+            free(subsets[1]);
+            goto leaf;
+        }
+        else
+        {
+            /*If the division is not statistically insignificant, we can keep it*/
+            ll_push(&(*root)->subtrees,malloc(sizeof(tree_node*)));
+            fit_tree((tree_node**)&(*root)->subtrees->self,subsets[0],chi_square_significance_limit,classfield);
+            ll_push(&(*root)->subtrees,malloc(sizeof(tree_node*)));
+            fit_tree((tree_node**)&(*root)->subtrees->next->self,subsets[1],chi_square_significance_limit,classfield);
+            ll_free(&subsets[0]->lines);
+            ll_free(&subsets[1]->lines);
+            free(subsets[0]);
+            free(subsets[1]);
+        }
+    }
+    else
+    {
+        (*root)->attribute=l;
+        (*root)->partition=0;
+        (*root)->subtrees=NULL;
+        len=ll_len(&l->sublabels);
+        lab=l->sublabels;
+        subsets=malloc(sizeof(dataset*)*len);
+        naconf.field_index=mi;
+        for(i=0;i<len;i++)
+        {
+            naconf.target=lab->self;
+            subsets[i]=filter_dataset(ds,f_by_name,&naconf);
+            if(ll_len(&subsets[i]->lines)==0)
+            {
+                len=i;
+                for(i=0;i<=len;i++)
+                {
+                    ll_free(&subsets[i]->lines);
+                    free(subsets[i]);
+                }
+                goto leaf;
+            }
+            lab=lab->next;
+        }
+        /*Chi-squared test*/
+        if(chi_squared(ds,subsets,len,classlabel->self)<chi_square_significance_limit)
+        {
+            /*If it doesn't pass the test, we choose the biggest count and set ourselves as a leaf node*/
+            for(i=0;i<len;i++)
+            {
+                ll_free(&subsets[i]->lines);
+                free(subsets[i]);
+            }
+            goto leaf;
+        }
+        else
+        {
+            /*If the division is not statistically insignificant, we can keep it*/
+            working=ll_push(&(*root)->subtrees,malloc(sizeof(tree_node*)));
+            fit_tree((tree_node**)&working->self,subsets[0],chi_square_significance_limit,classfield);
+            ll_free(&subsets[0]->lines);
+            free(subsets[0]);
+            for(i=1;i<len;i++)
+            {
+                working=ll_push(&working,malloc(sizeof(tree_node*)));
+                fit_tree((tree_node**)&working->self,subsets[i],chi_square_significance_limit,classfield);
+                ll_free(&subsets[i]->lines);
+                free(subsets[i]);
+            }
+        }
+    }
+    return;
+    leaf:
+    lab=((label*)classlabel->self)->sublabels;
+    mi=0;
+    while(lab)
+    {
+        i=reduce(ds,classfield,r_count,lab->self,0);
+        if(i>mi)
+        {
+            mi=i;
+            l=lab->self;
+        }
+        lab=lab->next;
+    }
+    (*root)->attribute=l;
+    (*root)->partition=0;
+    (*root)->subtrees=NULL;
+}
+
 int tree_size(tree_node* root)
 {
     int s=1;
@@ -1291,7 +1454,6 @@ double fit_forest(forest* a,dataset* ds,char* classfield,int max_size,double sub
         subset=sample_dataset(ds,slen,classfield);
         pruning_subset=sample_dataset(ds,slen,classfield);
         current_tree=NULL;
-        printf("\rfitting tree number %d",i);
         fflush(stdout);
 
         fit_tree(&current_tree,subset,0,classfield);
@@ -1304,7 +1466,6 @@ double fit_forest(forest* a,dataset* ds,char* classfield,int max_size,double sub
         free(subset);
         free(pruning_subset);
     }
-    printf("\rAll trees fit. Filtering by score...\n");
     /*Then we chop down the trees that hinder its performance in the full dataset*/
     tree=*a;
     while(tree)
@@ -1318,7 +1479,56 @@ double fit_forest(forest* a,dataset* ds,char* classfield,int max_size,double sub
             else *a=(*a)->next;
         }
         ll_remove(&tree);
-        if(score>=forest_score(*a,ds,classfield))
+        if(score>forest_score(*a,ds,classfield))
+        {
+            *a=ll_push_reverse(a,current_tree);
+        }
+        tree=next;
+    }
+    return forest_score(*a,ds,classfield)-pscore;
+}
+
+double fit_random_forest(forest* a,dataset* ds,char* classfield,int max_size,double subset_relative_size)
+{
+    int i,slen;
+    if(!a||!ds||max_size==0||((slen=ll_len(&ds->lines)*subset_relative_size)==0))return 0;
+    dataset* subset,*pruning_subset;
+    tree_node* current_tree;
+    tree_ll* tree,*next;
+    double score,pscore;
+    pscore=forest_score(*a,ds,classfield);
+    /*First we fill the forest up to the maximum size*/
+    for(i=ll_len(a);i<max_size;i++)
+    {
+        subset=sample_dataset(ds,slen,classfield);
+        pruning_subset=sample_dataset(ds,slen,classfield);
+        current_tree=NULL;
+        fflush(stdout);
+
+        fit_random_tree(&current_tree,subset,0,classfield);
+        prune_tree(&current_tree,pruning_subset,classfield);
+
+        ll_push(a,current_tree);
+
+        ll_free(&subset->lines);
+        ll_free(&pruning_subset->lines);
+        free(subset);
+        free(pruning_subset);
+    }
+    /*Then we chop down the trees that hinder its performance in the full dataset*/
+    tree=*a;
+    while(tree)
+    {
+        next=tree->next;
+        score=forest_score(*a,ds,classfield);
+        current_tree=tree->self;
+        if(!tree->prev)
+        {
+            if(!next)*a=NULL;
+            else *a=(*a)->next;
+        }
+        ll_remove(&tree);
+        if(score>forest_score(*a,ds,classfield))
         {
             *a=ll_push_reverse(a,current_tree);
         }

@@ -202,9 +202,12 @@ typedef struct _tree_node{
 double chi_squared(dataset* root,dataset** children,int len,label* classlabel);
 /*
 Trains a tree based on a dataset
-chi_square_significance_limit is generally 0.05
 */
 void fit_tree(tree_node** root,dataset* ds,double chi_square_significance_limit,char* classfield);
+/*
+Generates a random tree based on a dataset
+*/
+void fit_random_tree(tree_node** root,dataset* ds,double chi_square_significance_limit,char* classfield);
 /*
 Returns the most frequent class from the set after being classified by the tree
 */
@@ -258,7 +261,13 @@ Each fitting cycle selects random subsets for "bagging", so one might benefit fr
 After a few cycles, though, it's unlikely it will do any good.
 */
 double fit_forest(forest* a,dataset* ds,char* classfield,int max_size,double subset_relative_size);
-
+/*
+Generates a random forest for predicting <classfield> on ds.
+Returns the improvement on the forest performance after this cycle of fitting (one may fit a forest many times).
+Each fitting cycle selects random subsets for "bagging", so one might benefit from multiple fittings.
+After a few cycles, though, it's unlikely it will do any good.
+*/
+double fit_random_forest(forest* a,dataset* ds,char* classfield,int max_size,double subset_relative_size);
 /*
 Classifies a line
 */
