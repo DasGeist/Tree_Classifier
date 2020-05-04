@@ -1,5 +1,5 @@
 /*
-TreeClassifier.h - A simple implementation of an entropy-based decision-tree classifer
+TreeClassifier.h - A simple implementation of an entropy-based forest classifer
 Copyright (c) 2020 Sérgio F. da S. Jr.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -34,6 +34,8 @@ typedef struct _tree_ll{
 tree_ll *ll_push(tree_ll** list,void* item);
 /*Stack-like pop function for the list*/
 void* ll_pop(tree_ll **list);
+/*Removes a node from a list and returns its content*/
+void* ll_remove(tree_ll** node);
 /*Frees the list and all its children*/
 void ll_free(tree_ll **list);
 /*Frees the list, all its children and the 'self' pointers*/
@@ -90,7 +92,7 @@ Selects a label from its name
 */
 label* select_label(tree_ll* columns,char* labelname);
 /*
-Selects a label index from its name
+Selects a label index from its name (returns -1 if not found)
 */
 int select_label_index(tree_ll* columns,char* labelname);
 
@@ -242,3 +244,27 @@ void print_tree(tree_node* root);
 Generate a balanced sample (according to the distributions of <classfield> on <ds>) of size <len>
 */
 dataset* sample_dataset(dataset* ds,int len,char* classfield);
+
+/*
+A classifier forest.
+Consists on a tree_ll* of tree_node*
+*/
+typedef tree_ll* forest;
+
+/*
+Generates a forest for predicting <classfield> on ds.
+Returns the improvement on the forest performance after this cycle of fitting (one may fit a forest many times).
+Each fitting cycle selects random subsets for "bagging", so one might benefit from multiple fittings.
+After a few cycles, though, it's unlikely it will do any good.
+*/
+double fit_forest(forest* a,dataset* ds,char* classfield,int max_size,double subset_relative_size);
+
+/*
+Classifies a line
+*/
+label* forest_classify(forest a,tree_ll* line,tree_ll* columns);
+
+/*
+Classifies all lines on a dataset, ignoring <classfield> and then compares the result with <classfield>
+*/
+double forest_score(forest a,dataset* ds,char* classfield);

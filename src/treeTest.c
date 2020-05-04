@@ -22,11 +22,11 @@ int main()
     infoDataset(train);
     printf("#prune...\n");
     infoDataset(prune);
-    printf("#train:\n");
+    printf("Fitting...\n");
     fit_tree(&root,train,0,"colour");
     printf("Fitting completed.\nScore: %.2lf\nSize: %d\n",tree_score(root,data,"colour")*100,tree_size(root));
     printf("Pruning...\n");
-    prune_tree(&root,prune,"colour");
+    printf("Pruning improved score by %.4lf on pruning dataset.\n",prune_tree(&root,prune,"colour"));
     printf("Pruning completed.\nScore: %.2lf\nSize: %d\n",tree_score(root,data,"colour")*100,tree_size(root));
     if(tree_size(root)<10)print_tree(root);
     return 0;
