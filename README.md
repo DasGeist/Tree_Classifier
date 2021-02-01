@@ -22,4 +22,4 @@ Example:
 
 This is the command used for building the test program: `gcc -o build/treetest -Lbuild/ -Wl,-rpath=./build src/treeTest.c -lm -Wall -Werror -g -ltreeclassifier`
 
-_Made with <3 by Sérgio F._
+_Made with <3 by Amélia O. F._
