@@ -22,4 +22,6 @@ Example:
 
 This is the command used for building the test program: `gcc -o build/treetest -Lbuild/ -Wl,-rpath=./build src/treeTest.c -lm -Wall -Werror -g -ltreeclassifier`
 
+The tests are made to be run from the root directory (`build/<test name>`)
+
 _Made with <3 by Amélia O. F._
